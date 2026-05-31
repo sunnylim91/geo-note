@@ -1,0 +1,2224 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>기술사 답안노트</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Segoe UI', sans-serif; }
+
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+
+    .nav-btn { transition: background 0.12s; }
+    .nav-active { background: #eef4e6 !important; color: #3B6D11 !important; font-weight: 600; }
+    .nav-inactive { color: #4b5563; }
+    .nav-inactive:hover { background: #f9fafb; }
+
+    .chip { transition: background 0.12s, color 0.12s, border-color 0.12s; }
+    .chip-active   { background: #3B6D11; color: white; border: 1.5px solid #3B6D11; }
+    .chip-inactive { background: white; border: 1px solid #e5e7eb; color: #6b7280; }
+    .chip-inactive:hover { border-color: #3B6D11; color: #3B6D11; }
+
+    #editPanel { transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1); }
+    #overlay   { transition: opacity  0.28s ease; }
+
+    .field { transition: border-color 0.15s; }
+    .field:focus { outline: none; border-color: #3B6D11; }
+
+    .answer-card { transition: border-color 0.15s, box-shadow 0.15s; }
+    .answer-card:hover { border-color: #d1d5db; }
+    .answer-card.selected { border-color: #3B6D11 !important; box-shadow: 0 0 0 1px #3B6D11; }
+
+    .tag-pill { display: inline-flex; align-items: center; gap: 3px;
+      padding: 2px 4px 2px 8px; background: #f3f4f6; color: #4b5563;
+      border-radius: 6px; font-size: 12px; }
+    .tag-pill button { display: flex; align-items: center; justify-content: center;
+      width: 16px; height: 16px; border-radius: 4px; color: #9ca3af;
+      transition: background 0.1s, color 0.1s; font-size: 14px; line-height: 1; }
+    .tag-pill button:hover { background: #e5e7eb; color: #374151; }
+
+    #tagBox:focus-within { border-color: #3B6D11; }
+    .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+    mark { background: #c0dd97; border-radius: 2px; padding: 0 1px; color: inherit; }
+
+    .review-body {
+      max-height: 0; overflow: hidden; opacity: 0;
+      transition: max-height 0.32s cubic-bezier(0,1,0,1), opacity 0.15s;
+    }
+    .review-body.open {
+      max-height: 4000px; opacity: 1;
+      transition: max-height 0.4s cubic-bezier(0.4,0,0.2,1), opacity 0.2s 0.05s;
+    }
+    .review-chevron { transition: transform 0.25s ease; }
+    .review-card    { transition: opacity 0.22s ease, transform 0.22s ease; }
+
+    main { position: relative; }
+
+    /* Mobile */
+    #hamburgerBtn  { display: none; }
+    #mobileOverlay { display: none; position: fixed; inset: 0; z-index: 25; background: rgba(0,0,0,0.4); }
+    #panelBackBtn  { display: none; }
+
+    /* Global text wrapping (both desktop and mobile) */
+    .answer-card h3, .answer-card p,
+    #viewerBody div, #sidebarCategories button span {
+      word-break: keep-all; overflow-wrap: break-word;
+    }
+
+    @media (max-width: 768px) {
+      html { overflow-x: hidden; }
+
+      /* Sidebar: overlay slide-in, 80vw */
+      #sidebar {
+        position: fixed; top: 0; left: 0; height: 100vh; z-index: 30;
+        width: 80vw !important; max-width: 280px;
+        transform: translateX(-100%);
+        transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+      }
+      #sidebar.open { transform: translateX(0); box-shadow: 4px 0 24px rgba(0,0,0,0.15); }
+      #hamburgerBtn { display: flex !important; }
+      #mobileOverlay.open { display: block; }
+
+      /* Edit panel: fullscreen, back button replaces X */
+      #editPanel { width: 100% !important; min-width: 0 !important; height: 100vh; }
+      #panelBackBtn  { display: flex !important; }
+      #panelCloseBtn { display: none !important; }
+
+      /* Header layout */
+      #mainHeader { padding-left: 0.75rem !important; padding-right: 0.75rem !important; padding-top: 1rem !important; }
+      #cardArea   { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
+      .btn-label  { display: none; }
+
+      /* Viewer modal: fullscreen */
+      #viewerModal > div {
+        width: 100vw !important; max-width: 100vw !important;
+        height: 100vh !important; max-height: 100vh !important;
+        border-radius: 0 !important; margin: 0;
+      }
+
+      /* Cards: larger touch padding */
+      .answer-card { padding: 20px !important; }
+
+      /* Dashboard stats: single column */
+      .grid-cols-3 { grid-template-columns: 1fr !important; }
+
+      /* Category modal */
+      #catModal > div { width: 92vw !important; max-width: 92vw !important; }
+
+      /* Prevent iOS Safari auto-zoom (font < 16px triggers zoom) */
+      input, select, textarea { font-size: 16px !important; }
+
+      /* Touch targets */
+      .nav-btn { min-height: 44px; }
+      #mainHeader button { min-height: 44px; min-width: 44px; }
+
+      /* Review step dots: 12px */
+      .step-dots { font-size: 12px !important; }
+
+      /* Text wrapping for all content areas */
+      .answer-card h3, .answer-card p,
+      #viewerBody div, #fTitle, .tag-pill span,
+      #sidebarCategories button span, #viewerTitle {
+        word-break: keep-all; overflow-wrap: break-word; white-space: normal;
+      }
+    }
+  </style>
+</head>
+<body class="overflow-hidden bg-[#f5f4f0]">
+
+<!-- Mobile sidebar backdrop -->
+<div id="mobileOverlay" onclick="closeSidebar()"></div>
+
+<div class="flex h-screen">
+
+  <!-- ═══ SIDEBAR ════════════════════════════════════════════════════════ -->
+  <aside id="sidebar" class="w-[220px] flex-shrink-0 flex flex-col bg-white border-r border-gray-100 overflow-hidden">
+
+    <!-- Scrollable upper area: Logo + Nav + Categories -->
+    <div class="flex-1 overflow-y-auto scrollbar-hide">
+
+      <!-- Logo -->
+      <div class="flex items-center gap-2.5 px-4 pt-5 pb-4 border-b border-gray-100">
+        <div class="w-8 h-8 flex-shrink-0 rounded-xl flex items-center justify-center" style="background:#3B6D11">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
+              d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13
+                 C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13
+                 C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13
+                 C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+          </svg>
+        </div>
+        <div>
+          <p class="text-[13px] font-bold text-gray-800 leading-tight">기술사</p>
+          <p class="text-[11px] text-gray-400 leading-tight">답안노트</p>
+        </div>
+      </div>
+
+      <!-- Nav -->
+      <nav class="px-2 py-3 space-y-0.5">
+        <button data-view="all" onclick="setView(this)"
+          class="nav-btn nav-active w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left">
+          <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          전체 답안
+        </button>
+
+        <button data-view="review" onclick="setView(this)"
+          class="nav-btn nav-inactive w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left">
+          <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <span class="flex-1">오늘 복습</span>
+          <span id="reviewBadge" class="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white leading-none hidden"
+            style="background:#dc2626"></span>
+        </button>
+
+        <button data-view="favorites" onclick="setView(this)"
+          class="nav-btn nav-inactive w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left">
+          <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/>
+          </svg>
+          즐겨찾기
+        </button>
+
+        <button data-view="dashboard" onclick="setView(this)"
+          class="nav-btn nav-inactive w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left">
+          <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+          </svg>
+          대시보드
+        </button>
+      </nav>
+
+      <!-- Categories -->
+      <div class="px-2 pb-2">
+        <div class="border-t border-gray-100 pt-3">
+          <p class="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-2">카테고리</p>
+          <div id="sidebarCategories" class="space-y-0.5"></div>
+          <button onclick="openCatModal()"
+            class="nav-btn nav-inactive w-full flex items-center gap-1.5 px-3 py-1.5 mt-1.5 rounded-lg text-xs text-left"
+            style="color:#9ca3af">
+            ⚙ 카테고리 편집
+          </button>
+        </div>
+      </div>
+
+    </div><!-- /scrollable upper area -->
+
+    <!-- Bottom Actions: always visible, never clipped -->
+    <div class="flex-shrink-0 px-2 py-2.5 space-y-0.5" style="border-top:1px solid #e5e7eb;background:#fff">
+      <button onclick="openGistModal()"
+        class="nav-btn nav-inactive w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left text-gray-500">
+        <span class="text-base leading-none flex-shrink-0">☁</span>
+        Gist 동기화
+      </button>
+      <div id="gistSyncStatus" class="hidden px-3 pb-0.5 text-[11px] text-gray-400"></div>
+      <button onclick="handleExport()"
+        class="nav-btn nav-inactive w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left text-gray-500">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+        </svg>
+        내보내기
+      </button>
+      <button onclick="document.getElementById('importInput').click()"
+        class="nav-btn nav-inactive w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left text-gray-500">
+        <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l4-4m0 0l4 4m-4-4v12"/>
+        </svg>
+        가져오기
+      </button>
+      <input id="importInput" type="file" accept=".json" class="hidden">
+    </div>
+
+  </aside>
+
+  <!-- ═══ MAIN ════════════════════════════════════════════════════════════ -->
+  <main class="flex-1 min-w-0 flex flex-col overflow-hidden">
+
+    <header id="mainHeader" class="flex-shrink-0 px-7 pt-7 pb-4">
+      <div class="flex items-center justify-between mb-5">
+        <div class="flex items-center gap-3">
+          <!-- Hamburger (mobile only) -->
+          <button id="hamburgerBtn" onclick="toggleSidebar()"
+            class="w-9 h-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+          </button>
+          <h1 id="pageTitle" class="text-xl font-bold text-gray-800">전체 답안</h1>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="document.getElementById('fileUploadInput').click()"
+            class="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-medium border border-gray-200 text-gray-600 bg-white"
+            style="transition:background 0.12s"
+            onmouseover="this.style.background='#f9fafb'"
+            onmouseout="this.style.background='white'">
+            📎 <span class="btn-label">파일 업로드</span>
+          </button>
+          <input id="fileUploadInput" type="file" accept=".txt,.md,.pdf,.docx,.hwp" class="hidden">
+          <button onclick="openPanel(null)"
+            class="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-white"
+            style="background:#3B6D11;transition:background 0.12s"
+            onmouseover="this.style.background='#2d5509'"
+            onmouseout="this.style.background='#3B6D11'">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
+            </svg>
+            <span class="btn-label">새 답안</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Search -->
+      <div class="relative mb-3">
+        <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none"
+          fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <input id="searchInput" type="text" placeholder="키워드, 문제, 카테고리, 태그로 검색..."
+          class="field w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 placeholder-gray-400">
+      </div>
+
+    </header>
+
+    <!-- Card Area -->
+    <div id="cardArea" class="flex-1 overflow-y-auto px-7 pb-8 flex flex-col">
+
+      <!-- Empty State -->
+      <div id="emptyState" class="flex-1 flex flex-col items-center justify-center text-center pb-12">
+        <div class="w-20 h-20 bg-white border border-gray-100 rounded-2xl flex items-center justify-center mb-5">
+          <svg class="w-9 h-9 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+              d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13
+                 C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13
+                 C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13
+                 C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+          </svg>
+        </div>
+        <p id="emptyTitle" class="font-semibold text-gray-600 mb-2">첫 답안을 작성해보세요</p>
+        <p id="emptyDesc" class="text-sm text-gray-400 leading-relaxed">
+          상단의 <span class="font-semibold" style="color:#3B6D11">새 답안</span> 버튼으로<br>첫 번째 답안을 추가해보세요
+        </p>
+      </div>
+
+      <!-- Card Grid -->
+      <div id="cardGrid" class="hidden pt-2 space-y-3"></div>
+
+    </div>
+
+    <!-- Drag-and-drop overlay -->
+    <div id="dragOverlay" class="hidden absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 pointer-events-none" style="background:rgba(59,109,17,0.06);border:2.5px dashed #3B6D11;border-radius:16px;margin:8px">
+      <svg class="w-10 h-10" style="color:#3B6D11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+      </svg>
+      <p class="text-sm font-semibold" style="color:#3B6D11">여기에 파일을 놓으세요</p>
+      <p class="text-xs text-gray-400">txt · md · pdf · docx 지원</p>
+    </div>
+
+  </main>
+
+  <!-- ═══ OVERLAY ══════════════════════════════════════════════════════════ -->
+  <div id="overlay" onclick="closePanel()"
+    class="fixed inset-0 z-10 pointer-events-none"
+    style="background:rgba(0,0,0,0.18);opacity:0"></div>
+
+  <!-- ═══ EDIT PANEL ════════════════════════════════════════════════════════ -->
+  <div id="editPanel"
+    class="fixed top-0 right-0 h-screen z-20 flex flex-col bg-white border-l border-gray-100"
+    style="width:50%;min-width:440px;transform:translateX(100%)">
+
+    <!-- Panel Header -->
+    <div class="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <div class="flex items-center gap-3 min-w-0">
+        <button id="panelBackBtn" onclick="closePanel()"
+          class="items-center gap-1 text-sm font-medium text-gray-500 hover:text-gray-700 flex-shrink-0 mr-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+          </svg>
+          뒤로
+        </button>
+        <h2 id="panelTitle" class="font-bold text-gray-800 flex-shrink-0">새 답안 작성</h2>
+        <span id="saveStatus" class="text-xs truncate"></span>
+      </div>
+      <div class="flex items-center gap-1 flex-shrink-0">
+        <button id="favBtn" onclick="togglePanelFavorite()"
+          class="w-8 h-8 flex items-center justify-center rounded-lg text-xl leading-none hover:bg-gray-100 transition-colors"
+          style="color:#d1d5db" title="즐겨찾기">☆</button>
+        <button id="panelCloseBtn" onclick="closePanel()"
+          class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Panel Body -->
+    <div class="flex-1 overflow-y-auto px-6 py-5">
+      <div class="space-y-5">
+
+        <!-- Title -->
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-1.5">
+            문제 / 제목 <span class="text-red-400 font-normal">*</span>
+          </label>
+          <input id="fTitle" type="text"
+            placeholder="예) GPS 오차의 종류와 보정 방법에 대해 설명하시오"
+            class="field w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-800 placeholder-gray-400">
+        </div>
+
+        <!-- Category -->
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-1.5">카테고리</label>
+          <div class="relative">
+            <select id="fCategory" onchange="onCategoryChange()"
+              class="field w-full px-3.5 py-2.5 pr-9 border border-gray-200 rounded-lg text-sm text-gray-700 bg-white appearance-none">
+              <option value="미분류">미분류</option>
+              <option value="측지학">측지학</option>
+              <option value="GNSS">GNSS</option>
+              <option value="GIS">GIS</option>
+              <option value="공간정보">공간정보</option>
+              <option value="지적재조사">지적재조사</option>
+              <option value="드론측량">드론측량</option>
+              <option value="원격탐사">원격탐사</option>
+              <option value="디지털트윈">디지털트윈</option>
+              <option value="__custom__">직접 입력...</option>
+            </select>
+            <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+              <svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+              </svg>
+            </div>
+          </div>
+          <input id="fCustomCategory" type="text" placeholder="카테고리명을 직접 입력하세요"
+            class="field hidden mt-2 w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-700 placeholder-gray-400">
+        </div>
+
+        <!-- Tags -->
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-1.5">태그</label>
+          <div id="tagBox"
+            class="flex flex-wrap gap-1.5 px-2.5 py-2 border border-gray-200 rounded-lg min-h-[44px] cursor-text transition-colors"
+            onclick="document.getElementById('fTagInput').focus()">
+            <input id="fTagInput" type="text" placeholder="태그 입력 후 Enter (# 자동 추가)"
+              class="flex-1 min-w-[140px] text-sm text-gray-700 placeholder-gray-400 outline-none bg-transparent py-0.5">
+          </div>
+          <p class="text-[11px] text-gray-400 mt-1">Enter 또는 쉼표로 추가 · Backspace로 마지막 태그 삭제</p>
+        </div>
+
+        <!-- Content -->
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="block text-sm font-semibold text-gray-700">
+              답안 내용 <span class="text-red-400 font-normal">*</span>
+            </label>
+            <button id="toggleModeBtn" onclick="toggleContentMode()"
+              class="text-xs px-2 py-0.5 rounded border border-gray-200 hover:border-gray-300 transition-colors"
+              style="color:#9ca3af">뷰어로 보기</button>
+          </div>
+          <!-- Viewer mode (hidden by default) -->
+          <div id="contentViewer" class="hidden border border-gray-200 rounded-lg overflow-hidden">
+            <div id="viewerLines" class="min-h-[100px]"></div>
+            <button onclick="addViewerLine()"
+              class="w-full py-2.5 text-xs border-t border-gray-100 hover:bg-gray-50 transition-colors"
+              style="color:#9ca3af">+ 항목 추가</button>
+          </div>
+          <!-- Raw textarea mode -->
+          <textarea id="fContent" rows="18"
+            placeholder="답안을 작성하세요..."
+            class="field w-full px-3.5 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-700 placeholder-gray-400 resize-none leading-relaxed"
+            style="font-family:'D2Coding',Consolas,'Courier New',monospace;font-size:13px"></textarea>
+        </div>
+
+        <!-- AI 키워드 추출 -->
+        <div class="border-t border-gray-100 pt-5">
+          <div class="flex items-center justify-between mb-2.5">
+            <span class="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+              <svg class="w-4 h-4" style="color:#7c3aed" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+              </svg>
+              AI 키워드 추출
+            </span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full font-medium"
+              style="background:#f3f0ff;color:#7c3aed">Claude API</span>
+          </div>
+
+          <div class="flex gap-2 mb-2.5">
+            <input id="fApiKey" type="password" placeholder="sk-ant-api03-..."
+              class="field flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-700 placeholder-gray-400"
+              style="font-family:monospace">
+            <button id="extractBtn" onclick="extractKeywords()"
+              class="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-white flex-shrink-0"
+              style="background:#7c3aed;transition:background 0.12s"
+              onmouseover="this.style.background='#6d28d9'"
+              onmouseout="this.style.background='#7c3aed'">
+              <svg id="extractSpinner" class="hidden w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" style="opacity:.25"></circle>
+                <path fill="currentColor" style="opacity:.75"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+              </svg>
+              <span id="extractBtnText">키워드 추출</span>
+            </button>
+          </div>
+
+          <div id="kwResult" class="hidden">
+            <p class="text-[11px] text-gray-400 mb-2">클릭하면 태그에 추가됩니다</p>
+            <div id="kwChips" class="flex flex-wrap gap-1.5"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Panel Footer -->
+    <div class="flex-shrink-0 flex items-center gap-3 px-6 py-4 border-t border-gray-100">
+      <button id="deleteBtn" onclick="handleDelete()"
+        class="hidden px-4 py-2.5 border border-red-200 text-red-500 rounded-xl text-sm font-medium hover:bg-red-50 transition-colors">
+        삭제
+      </button>
+      <div class="flex-1"></div>
+      <button onclick="closePanel()"
+        class="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors">
+        닫기
+      </button>
+      <button onclick="manualSave()"
+        class="px-4 py-2.5 rounded-xl text-sm font-semibold text-white"
+        style="background:#3B6D11;transition:background 0.12s"
+        onmouseover="this.style.background='#2d5509'"
+        onmouseout="this.style.background='#3B6D11'">
+        저장
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Gist Sync Modal -->
+<div id="gistModal" class="hidden fixed inset-0 z-50 flex items-center justify-center"
+  style="background:rgba(0,0,0,0.4)" onclick="if(event.target===this)closeGistModal()">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 flex flex-col" style="max-height:90vh">
+    <div class="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-gray-100">
+      <h3 class="font-bold text-gray-800">GitHub Gist 동기화 설정</h3>
+      <button onclick="closeGistModal()"
+        class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="overflow-y-auto px-6 py-5 space-y-4 flex-1">
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 mb-1.5">GitHub Personal Access Token</label>
+        <input id="gistToken" type="password" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+          class="field w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-700 placeholder-gray-400">
+        <p class="mt-1.5 text-[11px] text-gray-400">github.com → Settings → Developer settings → Personal access tokens → gist 권한 체크</p>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-gray-500 mb-1.5">Gist ID <span class="font-normal text-gray-400">(선택)</span></label>
+        <input id="gistIdInput" type="text" placeholder="비워두면 최초 저장 시 자동 생성"
+          class="field w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-700 placeholder-gray-400">
+      </div>
+      <div id="gistLastSync" class="hidden text-[11px] text-gray-400 pt-0.5"></div>
+      <div class="border-t border-gray-100 pt-3 text-[11px] text-gray-400 leading-relaxed">
+        <strong class="text-gray-500">Token 발급 방법:</strong>
+        GitHub → Settings → Developer settings → Personal access tokens → Tokens(classic) → Generate new token → gist 항목만 체크 → 생성된 토큰 복사<br>
+        <a href="https://github.com/settings/tokens/new?scopes=gist" target="_blank" rel="noopener noreferrer"
+          class="inline-block mt-1 underline" style="color:#3B6D11">바로가기: Token 발급 페이지 →</a>
+      </div>
+    </div>
+    <div class="flex-shrink-0 px-6 py-4 border-t border-gray-100 flex gap-2">
+      <button onclick="saveGistSettings()"
+        class="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white"
+        style="background:#3B6D11;transition:background 0.12s"
+        onmouseover="this.style.background='#2d5509'"
+        onmouseout="this.style.background='#3B6D11'">저장 및 지금 업로드</button>
+      <button onclick="loadFromGistModal()"
+        class="flex-1 py-2.5 rounded-xl text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">Gist에서 불러오기</button>
+      <button onclick="closeGistModal()"
+        class="px-4 py-2.5 rounded-xl text-sm text-gray-400 border border-gray-200 hover:bg-gray-50 transition-colors">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- Category management modal -->
+<div id="catModal" class="hidden fixed inset-0 z-50 flex items-center justify-center"
+  style="background:rgba(0,0,0,0.4)" onclick="if(event.target===this)closeCatModal()">
+  <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 flex flex-col" style="max-height:80vh">
+    <div class="flex-shrink-0 flex items-center justify-between px-5 py-4 border-b border-gray-100">
+      <h3 class="font-bold text-gray-800">카테고리 관리</h3>
+      <button onclick="closeCatModal()"
+        class="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div id="catModalList" class="flex-1 overflow-y-auto px-3 py-2 space-y-1 min-h-[80px]"></div>
+    <div class="flex-shrink-0 border-t border-gray-100 px-4 py-3">
+      <div class="flex gap-2">
+        <input id="newCatInput" type="text" placeholder="새 카테고리명"
+          onkeydown="if(event.key==='Enter')addCategoryFromModal()"
+          class="field flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 placeholder-gray-400">
+        <button onclick="addCategoryFromModal()"
+          class="px-3.5 py-2 rounded-lg text-sm font-semibold text-white flex-shrink-0"
+          style="background:#3B6D11;transition:background 0.12s"
+          onmouseover="this.style.background='#2d5509'"
+          onmouseout="this.style.background='#3B6D11'">추가</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Viewer Modal -->
+<div id="viewerModal" class="hidden fixed inset-0 z-50 flex items-center justify-center"
+  onclick="if(event.target===this)closeViewerModal()" style="background:rgba(0,0,0,0.5)">
+  <div class="bg-white rounded-2xl shadow-2xl flex flex-col" style="width:800px;max-width:95vw;max-height:90vh">
+    <div class="flex-shrink-0 flex items-center gap-4 px-6 py-4 border-b border-gray-100">
+      <h2 id="viewerTitle" class="flex-1 min-w-0 font-bold text-gray-800 text-lg leading-snug"></h2>
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <button onclick="openEditFromViewer()"
+          class="px-4 py-2 rounded-xl text-sm font-semibold text-white"
+          style="background:#3B6D11;transition:background 0.12s"
+          onmouseover="this.style.background='#2d5509'"
+          onmouseout="this.style.background='#3B6D11'">편집</button>
+        <button onclick="closeViewerModal()"
+          class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div id="viewerBody" class="flex-1 overflow-y-auto px-8 py-6"></div>
+    <div id="viewerFooter" class="flex-shrink-0 flex items-center gap-2 flex-wrap px-6 py-4 border-t border-gray-100"></div>
+  </div>
+</div>
+
+<!-- File loading overlay -->
+<div id="fileLoadingOverlay" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.4)">
+  <div class="bg-white rounded-2xl px-8 py-6 flex flex-col items-center gap-3 shadow-xl">
+    <svg class="w-7 h-7 animate-spin" style="color:#3B6D11" fill="none" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" style="opacity:.25"></circle>
+      <path fill="currentColor" style="opacity:.75" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+    </svg>
+    <p class="text-sm font-semibold text-gray-700">파일 읽는 중...</p>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+// Constants
+// ══════════════════════════════════════════════════════════════
+const LS_KEY = 'tech_notes';
+const DEFAULT_CATS = ['미분류','측지학','GNSS','GIS','공간정보','지적재조사','드론측량','원격탐사','디지털트윈'];
+const CATS_KEY = 'tech_categories';
+const VIEW_TITLES = { all:'전체 답안', review:'오늘 복습', favorites:'즐겨찾기', dashboard:'대시보드' };
+const REVIEW_INTERVALS = [1, 3, 7, 14, 30];
+
+// ══════════════════════════════════════════════════════════════
+// State
+// ══════════════════════════════════════════════════════════════
+let currentView    = 'all';
+let activeCategory = null;
+let searchQuery    = '';
+let currentEditId  = null;
+let currentTags    = [];
+let currentFav     = false;
+let autoSaveTimer  = null;
+let searchTimer    = null;
+let contentMode    = 'raw';
+let viewerLines    = [];
+
+// ══════════════════════════════════════════════════════════════
+// Storage helpers
+// ══════════════════════════════════════════════════════════════
+function loadNotes() {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); }
+  catch { return []; }
+}
+function saveNotes(notes) { localStorage.setItem(LS_KEY, JSON.stringify(notes)); uploadToGist(); }
+
+function loadCategories() {
+  try {
+    const raw = localStorage.getItem(CATS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed.list) && parsed.list.length) return parsed.list;
+    }
+  } catch {}
+  return [...DEFAULT_CATS];
+}
+function saveCategories(list) {
+  localStorage.setItem(CATS_KEY, JSON.stringify({ list }));
+  uploadToGist();
+}
+
+function getToday() { return new Date().toISOString().slice(0, 10); }
+function getTomorrow() {
+  const d = new Date(); d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function highlight(rawText, q) {
+  if (!q || !rawText) return esc(rawText || '');
+  const lower = rawText.toLowerCase(), ql = q.toLowerCase();
+  const parts = []; let i = 0;
+  while (i < rawText.length) {
+    const idx = lower.indexOf(ql, i);
+    if (idx === -1) { parts.push(esc(rawText.slice(i))); break; }
+    parts.push(esc(rawText.slice(i, idx)));
+    parts.push(`<mark>${esc(rawText.slice(idx, idx + ql.length))}</mark>`);
+    i = idx + ql.length;
+  }
+  return parts.join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+// CRUD
+// ══════════════════════════════════════════════════════════════
+function createNote(data) {
+  const notes = loadNotes();
+  const note = {
+    id:         Date.now().toString(),
+    title:      data.title    || '',
+    content:    data.content  || '',
+    category:   data.category || '미분류',
+    tags:       data.tags     || [],
+    keywords:   [],
+    isFavorite: data.isFavorite || false,
+    reviewStep: 0,
+    reviewAt:   getTomorrow(),
+    createdAt:  getToday(),
+    updatedAt:  getToday()
+  };
+  notes.unshift(note);
+  saveNotes(notes);
+  return note;
+}
+
+function updateNote(id, data) {
+  const notes = loadNotes();
+  const idx = notes.findIndex(n => n.id === id);
+  if (idx === -1) return null;
+  notes[idx] = { ...notes[idx], ...data, updatedAt: getToday() };
+  saveNotes(notes);
+  return notes[idx];
+}
+
+function removeNote(id) { saveNotes(loadNotes().filter(n => n.id !== id)); }
+function getNoteById(id) { return loadNotes().find(n => n.id === id) || null; }
+
+// ══════════════════════════════════════════════════════════════
+// Spaced repetition
+// ══════════════════════════════════════════════════════════════
+function advanceReview(id) {
+  const note = getNoteById(id);
+  if (!note || note.reviewStep >= 5) return;
+  const newStep = note.reviewStep + 1;
+  let newReviewAt = null;
+  if (newStep < 5) {
+    const d = new Date();
+    d.setDate(d.getDate() + REVIEW_INTERVALS[newStep]);
+    newReviewAt = d.toISOString().slice(0, 10);
+  }
+  updateNote(id, { reviewStep: newStep, reviewAt: newReviewAt });
+}
+
+// ══════════════════════════════════════════════════════════════
+// Filter
+// ══════════════════════════════════════════════════════════════
+function getFilteredNotes() {
+  let notes = loadNotes();
+  const today = getToday();
+  if (currentView === 'review')    notes = notes.filter(n => n.reviewAt && n.reviewAt <= today && n.reviewStep < 5);
+  if (currentView === 'favorites') notes = notes.filter(n => n.isFavorite);
+  if (activeCategory) notes = notes.filter(n => n.category === activeCategory);
+  const q = searchQuery.trim().toLowerCase();
+  if (q) notes = notes.filter(n =>
+    n.title.toLowerCase().includes(q) ||
+    n.content.toLowerCase().includes(q) ||
+    n.tags.some(t => t.toLowerCase().includes(q))
+  );
+  return notes;
+}
+
+// ══════════════════════════════════════════════════════════════
+// Review badge & step dots
+// ══════════════════════════════════════════════════════════════
+function getReviewBadge(note) {
+  if (note.reviewStep >= 5) return { text:'장기기억', color:'#16a34a', bg:'#dcfce7' };
+  if (!note.reviewAt) return null;
+  const today = getToday();
+  if (note.reviewAt < today)   return { text:'복습필요', color:'#dc2626', bg:'#fee2e2' };
+  if (note.reviewAt === today) return { text:'오늘복습', color:'#dc2626', bg:'#fee2e2' };
+  const days = Math.round((new Date(note.reviewAt) - new Date(today)) / 86400000);
+  return { text:`D-${days}`, color:'#d97706', bg:'#fef3c7' };
+}
+
+function renderStepDots(step) {
+  let inner = '';
+  for (let i = 0; i < 5; i++) inner += `<span style="color:${i < step ? '#3B6D11' : '#d1d5db'}">●</span>`;
+  return `<span class="step-dots inline-flex gap-0.5 text-[10px] leading-none">${inner}</span>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// Render cards
+// ══════════════════════════════════════════════════════════════
+function renderCards() {
+  if (currentView === 'dashboard') { renderDashboard(); return; }
+  if (currentView === 'review')    { renderReviewCards(); return; }
+
+  const notes      = getFilteredNotes();
+  const emptyState = document.getElementById('emptyState');
+  const cardGrid   = document.getElementById('cardGrid');
+
+  if (notes.length === 0) {
+    emptyState.style.display = '';
+    cardGrid.classList.add('hidden');
+    setEmptyText();
+    return;
+  }
+
+  emptyState.style.display = 'none';
+  cardGrid.classList.remove('hidden');
+  cardGrid.innerHTML = notes.map(renderCard).join('');
+
+  if (currentEditId) {
+    const card = cardGrid.querySelector(`.answer-card[data-id="${currentEditId}"]`);
+    if (card) card.classList.add('selected');
+  }
+
+  updateCountBadges();
+}
+
+function renderCard(note) {
+  const q        = searchQuery.trim().toLowerCase();
+  const badge    = getReviewBadge(note);
+  const preview  = note.content.replace(/[#*`>\-\[\]_]/g,'').replace(/\n+/g,' ').trim().slice(0,130);
+  const tagsHtml = note.tags.slice(0,5).map(t =>
+    `<span class="inline-block px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[11px]">#${q ? highlight(t,q) : esc(t)}</span>`
+  ).join('');
+  const titleHtml   = q ? highlight(note.title || '(제목 없음)', q) : (esc(note.title) || '(제목 없음)');
+  const previewHtml = preview ? (q ? highlight(preview, q) : esc(preview)) : '';
+
+  return `
+    <div class="answer-card bg-white border border-gray-100 rounded-xl p-4 cursor-pointer"
+      data-id="${note.id}" onclick="openViewerModal('${note.id}')">
+      <div class="flex items-start justify-between mb-2.5 gap-2">
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <span class="inline-block px-2 py-0.5 rounded-md text-xs font-medium flex-shrink-0"
+            style="background:#eef4e6;color:#3B6D11">${esc(note.category)}</span>
+          ${badge ? `<span class="inline-block px-2 py-0.5 rounded-md text-xs font-semibold flex-shrink-0"
+            style="background:${badge.bg};color:${badge.color}">${badge.text}</span>` : ''}
+        </div>
+        <button onclick="event.stopPropagation();quickToggleFav('${note.id}')"
+          class="flex-shrink-0 text-xl leading-none transition-colors mt-0.5"
+          style="color:${note.isFavorite ? '#facc15' : '#d1d5db'}"
+          title="즐겨찾기">${note.isFavorite ? '★' : '☆'}</button>
+      </div>
+      <h3 class="font-semibold text-gray-800 text-sm mb-1.5 line-clamp-2">${titleHtml}</h3>
+      ${previewHtml ? `<p class="text-xs text-gray-500 line-clamp-2 mb-3 leading-relaxed">${previewHtml}</p>` : '<div class="mb-3"></div>'}
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex gap-1 flex-wrap">${tagsHtml}</div>
+        <span class="flex-shrink-0 text-[11px] text-gray-400">${note.createdAt}</span>
+      </div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// Review accordion view
+// ══════════════════════════════════════════════════════════════
+function renderReviewCards() {
+  const notes      = getFilteredNotes();
+  const emptyState = document.getElementById('emptyState');
+  const cardGrid   = document.getElementById('cardGrid');
+
+  if (notes.length === 0) {
+    emptyState.style.display = '';
+    cardGrid.classList.add('hidden');
+    setEmptyText();
+    return;
+  }
+
+  emptyState.style.display = 'none';
+  cardGrid.classList.remove('hidden');
+  cardGrid.innerHTML = notes.map(renderReviewCard).join('');
+  updateCountBadges();
+}
+
+function renderReviewCard(note) {
+  const q        = searchQuery.trim().toLowerCase();
+  const isLate   = note.reviewAt < getToday();
+  const titleHtml = q ? highlight(note.title || '(제목 없음)', q) : (esc(note.title) || '(제목 없음)');
+  const tagsHtml  = note.tags.slice(0,5).map(t =>
+    `<span class="inline-block px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[11px]">#${q ? highlight(t,q) : esc(t)}</span>`
+  ).join('');
+
+  return `
+    <div class="review-card bg-white border border-gray-100 rounded-xl overflow-hidden" data-id="${note.id}">
+      <div class="p-4 cursor-pointer select-none" onclick="toggleReviewCard('${note.id}')">
+        <div class="flex items-center justify-between gap-3 mb-2.5">
+          <div class="flex items-center gap-1.5 flex-wrap min-w-0">
+            <span class="inline-block px-2 py-0.5 rounded-md text-xs font-medium flex-shrink-0"
+              style="background:#eef4e6;color:#3B6D11">${esc(note.category)}</span>
+            <span class="inline-block px-2 py-0.5 rounded-md text-xs font-semibold flex-shrink-0"
+              style="background:#fee2e2;color:#dc2626">${isLate ? '복습필요' : '오늘복습'}</span>
+          </div>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            ${renderStepDots(note.reviewStep)}
+            <svg id="rchev-${note.id}" class="review-chevron w-4 h-4 text-gray-400"
+              fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </div>
+        </div>
+        <h3 class="font-semibold text-gray-800 text-sm leading-snug">${titleHtml}</h3>
+        ${tagsHtml ? `<div class="flex gap-1 mt-2 flex-wrap">${tagsHtml}</div>` : ''}
+      </div>
+      <div id="rbody-${note.id}" class="review-body">
+        <div class="border-t border-gray-100 px-4 py-3">
+          <pre class="text-[13px] text-gray-700 whitespace-pre-wrap leading-relaxed"
+            style="font-family:'D2Coding',Consolas,'Courier New',monospace">${esc(note.content) || '(내용 없음)'}</pre>
+        </div>
+        <div class="px-4 pb-4 flex items-center justify-between">
+          <span class="text-xs text-gray-400">${note.reviewStep}/5단계 · 다음 복습까지 ${note.reviewStep < 4 ? REVIEW_INTERVALS[note.reviewStep+1] + '일 후' : '30일 후 장기기억'}</span>
+          <button onclick="event.stopPropagation();completeReview('${note.id}')"
+            class="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold text-white"
+            style="background:#3B6D11;transition:background 0.12s"
+            onmouseover="this.style.background='#2d5509'"
+            onmouseout="this.style.background='#3B6D11'">
+            복습 완료
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function toggleReviewCard(id) {
+  const body = document.getElementById('rbody-' + id);
+  const chev = document.getElementById('rchev-' + id);
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  chev.style.transform = isOpen ? '' : 'rotate(180deg)';
+}
+
+function completeReview(id) {
+  advanceReview(id);
+  const card = document.querySelector(`.review-card[data-id="${id}"]`);
+  if (!card) return;
+  card.style.opacity   = '0';
+  card.style.transform = 'translateX(16px)';
+  setTimeout(() => {
+    card.remove();
+    if (!document.querySelector('.review-card')) {
+      document.getElementById('emptyState').style.display = '';
+      document.getElementById('cardGrid').classList.add('hidden');
+      setEmptyText();
+    }
+    updateCountBadges();
+    renderSidebarCategories();
+  }, 230);
+}
+
+function setEmptyText() {
+  const q = searchQuery.trim();
+  if (q) {
+    document.getElementById('emptyTitle').textContent = '검색 결과가 없습니다';
+    document.getElementById('emptyDesc').innerHTML = `<span style="color:#6b7280">"${esc(q)}"</span>에 해당하는 답안이 없습니다`;
+    return;
+  }
+  const msgs = {
+    all:       ['첫 답안을 작성해보세요', '상단의 <span class="font-semibold" style="color:#3B6D11">새 답안</span> 버튼으로<br>첫 번째 답안을 추가해보세요'],
+    review:    ['오늘 복습할 답안이 없습니다 🎉', '모든 복습을 완료했습니다'],
+    favorites: ['즐겨찾기한 답안이 없어요', '카드의 ☆ 아이콘을 눌러 즐겨찾기에 추가하세요'],
+    dashboard: ['', '']
+  };
+  const [title, desc] = msgs[currentView] || msgs.all;
+  document.getElementById('emptyTitle').textContent = title;
+  document.getElementById('emptyDesc').innerHTML    = desc;
+}
+
+// ══════════════════════════════════════════════════════════════
+// Dashboard
+// ══════════════════════════════════════════════════════════════
+function renderDashboard() {
+  const notes  = loadNotes();
+  const today  = getToday();
+  const due    = notes.filter(n => n.reviewAt && n.reviewAt <= today && n.reviewStep < 5).length;
+  const favCnt = notes.filter(n => n.isFavorite).length;
+  const cats   = {};
+  notes.forEach(n => { cats[n.category] = (cats[n.category] || 0) + 1; });
+
+  document.getElementById('emptyState').style.display = 'none';
+  const cardGrid = document.getElementById('cardGrid');
+  cardGrid.classList.remove('hidden');
+
+  const maxCat  = Math.max(...Object.values(cats), 1);
+  const catRows = Object.entries(cats).sort((a,b) => b[1]-a[1]).map(([cat,cnt]) => `
+    <div class="flex items-center gap-3 py-1.5">
+      <span class="text-sm text-gray-600 w-24 flex-shrink-0 truncate">${esc(cat)}</span>
+      <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div class="h-full rounded-full" style="width:${Math.round(cnt/maxCat*100)}%;background:#3B6D11"></div>
+      </div>
+      <span class="text-xs text-gray-500 w-4 text-right tabular-nums flex-shrink-0">${cnt}</span>
+    </div>`).join('') || '<p class="text-sm text-gray-400 py-2">데이터 없음</p>';
+
+  const STEP_LABELS = ['0단계','1단계','2단계','3단계','4단계','장기기억'];
+  const STEP_COLORS = ['#9ca3af','#facc15','#fb923c','#60a5fa','#a78bfa','#16a34a'];
+  const maxStep = Math.max(...STEP_LABELS.map((_,s) => notes.filter(n => n.reviewStep===s).length), 1);
+  const stepRows = STEP_LABELS.map((label,s) => {
+    const cnt = notes.filter(n => n.reviewStep === s).length;
+    return `
+    <div class="flex items-center gap-3 py-1.5">
+      <span class="text-xs flex-shrink-0 w-14" style="color:${STEP_COLORS[s]}">${label}</span>
+      <div class="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div class="h-full rounded-full" style="width:${Math.round(cnt/maxStep*100)}%;background:${STEP_COLORS[s]}"></div>
+      </div>
+      <span class="text-xs text-gray-500 w-4 text-right tabular-nums flex-shrink-0">${cnt}</span>
+    </div>`;
+  }).join('');
+
+  cardGrid.innerHTML = `
+    <div class="pt-2 space-y-3">
+      <div class="grid grid-cols-3 gap-3">
+        <div class="bg-white rounded-xl p-4 border border-gray-100 text-center">
+          <p class="text-xs text-gray-500 mb-2">전체 답안</p>
+          <p class="text-2xl font-bold text-gray-800">${notes.length}</p>
+        </div>
+        <div class="bg-white rounded-xl p-4 border border-gray-100 text-center">
+          <p class="text-xs text-gray-500 mb-2">즐겨찾기</p>
+          <p class="text-2xl font-bold" style="color:#facc15">${favCnt}</p>
+        </div>
+        <div class="bg-white rounded-xl p-4 border border-gray-100 text-center">
+          <p class="text-xs text-gray-500 mb-2">오늘 복습</p>
+          <p class="text-2xl font-bold" style="color:#dc2626">${due}</p>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl p-5 border border-gray-100">
+        <p class="text-sm font-semibold text-gray-700 mb-3">카테고리별 현황</p>${catRows}
+      </div>
+      <div class="bg-white rounded-xl p-5 border border-gray-100">
+        <p class="text-sm font-semibold text-gray-700 mb-3">복습 단계 분포</p>${stepRows}
+      </div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════
+// Sidebar categories
+// ══════════════════════════════════════════════════════════════
+function renderSidebarCategories() {
+  const cats  = loadCategories();
+  const notes = loadNotes();
+  const counts = {};
+  notes.forEach(n => { counts[n.category] = (counts[n.category] || 0) + 1; });
+
+  const orphans = Object.keys(counts).filter(c => !cats.includes(c));
+  const allCats = [...cats, ...orphans];
+
+  const container = document.getElementById('sidebarCategories');
+  container.innerHTML = '';
+
+  if (!allCats.length) {
+    container.innerHTML = '<p class="px-3 py-1.5 text-[11px] text-gray-400">카테고리 없음</p>';
+    return;
+  }
+
+  allCats.forEach(name => {
+    const cnt      = counts[name] || 0;
+    const isActive = activeCategory === name;
+
+    const btn = document.createElement('button');
+    btn.className = `nav-btn ${isActive ? 'nav-active' : 'nav-inactive'} w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-left`;
+    btn.addEventListener('click', () => filterByCategory(name));
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'truncate flex-1';
+    nameSpan.textContent = name;
+
+    const cntSpan = document.createElement('span');
+    cntSpan.className = `tabular-nums ml-1 flex-shrink-0 ${isActive ? 'text-[#3B6D11]' : 'text-gray-400'}`;
+    cntSpan.textContent = cnt;
+
+    btn.appendChild(nameSpan);
+    btn.appendChild(cntSpan);
+    container.appendChild(btn);
+  });
+}
+
+function renameCategory(oldName, newName) {
+  const cats = loadCategories();
+  if (cats.includes(newName)) { showToast('이미 존재하는 카테고리명입니다.'); return; }
+  const idx = cats.indexOf(oldName);
+  if (idx !== -1) { cats[idx] = newName; saveCategories(cats); }
+  const notes = loadNotes();
+  notes.forEach(n => { if (n.category === oldName) n.category = newName; });
+  saveNotes(notes);
+  if (activeCategory === oldName) activeCategory = newName;
+  renderSidebarCategories();
+  renderCards();
+  if (panel.style.transform === 'translateX(0)') {
+    const cur = getFieldCategory();
+    renderCategorySelect();
+    setFieldCategory(cur === oldName ? newName : cur);
+  }
+}
+
+function deleteCategory(name) {
+  const notes    = loadNotes();
+  const affected = notes.filter(n => n.category === name);
+  if (affected.length > 0) {
+    if (!confirm(`이 카테고리 답안 ${affected.length}개가 미분류로 변경됩니다. 삭제할까요?`)) return;
+    affected.forEach(n => { n.category = '미분류'; });
+    saveNotes(notes);
+  }
+  saveCategories(loadCategories().filter(c => c !== name));
+  if (activeCategory === name) activeCategory = null;
+  renderSidebarCategories();
+  renderCards();
+  if (panel.style.transform === 'translateX(0)') {
+    const cur = getFieldCategory();
+    renderCategorySelect();
+    if (cur === name) setFieldCategory('미분류');
+    else setFieldCategory(cur);
+  }
+}
+
+function renderCategorySelect(retainValue) {
+  const cats = loadCategories();
+  const sel  = document.getElementById('fCategory');
+  const prev = retainValue !== undefined ? retainValue : sel.value;
+  sel.innerHTML = '';
+  cats.forEach(cat => {
+    const opt = document.createElement('option');
+    opt.value = cat; opt.textContent = cat;
+    sel.appendChild(opt);
+  });
+  const customOpt = document.createElement('option');
+  customOpt.value = '__custom__'; customOpt.textContent = '직접 입력...';
+  sel.appendChild(customOpt);
+  const exists = [...sel.options].some(o => o.value === prev);
+  sel.value = exists ? prev : (cats.includes('미분류') ? '미분류' : (cats[0] || '미분류'));
+}
+
+function filterByCategory(cat) {
+  activeCategory = activeCategory === cat ? null : cat;
+  if (activeCategory && currentView !== 'all') {
+    const btn = document.querySelector('.nav-btn[data-view="all"]');
+    if (btn) setView(btn);
+  }
+  document.querySelectorAll('.chip').forEach(c => {
+    c.classList.remove('chip-active'); c.classList.add('chip-inactive');
+  });
+  if (!activeCategory) document.querySelector('.chip[data-cat=""]')?.classList.replace('chip-inactive','chip-active');
+  closeSidebar();
+  renderSidebarCategories();
+  renderCards();
+}
+
+// ══════════════════════════════════════════════════════════════
+// Nav / View
+// ══════════════════════════════════════════════════════════════
+function setView(btn) {
+  currentView    = btn.dataset.view;
+  activeCategory = null;
+
+  document.querySelectorAll('.nav-btn[data-view]').forEach(b => {
+    b.classList.remove('nav-active'); b.classList.add('nav-inactive');
+  });
+  btn.classList.add('nav-active'); btn.classList.remove('nav-inactive');
+  document.getElementById('pageTitle').textContent = VIEW_TITLES[currentView] || '전체 답안';
+
+  document.querySelectorAll('.chip').forEach(c => {
+    c.classList.remove('chip-active'); c.classList.add('chip-inactive');
+  });
+  document.querySelector('.chip[data-cat=""]')?.classList.replace('chip-inactive','chip-active');
+
+  closeSidebar();
+  renderSidebarCategories();
+  renderCards();
+}
+
+// ══════════════════════════════════════════════════════════════
+// Filter chips
+// ══════════════════════════════════════════════════════════════
+function setChip(btn) {
+  document.querySelectorAll('.chip').forEach(c => {
+    c.classList.remove('chip-active'); c.classList.add('chip-inactive');
+  });
+  btn.classList.add('chip-active'); btn.classList.remove('chip-inactive');
+  activeCategory = btn.dataset.cat || null;
+  renderSidebarCategories();
+  renderCards();
+}
+
+// ══════════════════════════════════════════════════════════════
+// Review badge
+// ══════════════════════════════════════════════════════════════
+function updateCountBadges() {
+  const due   = loadNotes().filter(n => n.reviewAt && n.reviewAt <= getToday() && n.reviewStep < 5).length;
+  const badge = document.getElementById('reviewBadge');
+  if (due > 0) { badge.textContent = due; badge.classList.remove('hidden'); }
+  else         { badge.classList.add('hidden'); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// Mobile sidebar
+// ══════════════════════════════════════════════════════════════
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const mo      = document.getElementById('mobileOverlay');
+  const open    = sidebar.classList.contains('open');
+  sidebar.classList.toggle('open', !open);
+  mo.classList.toggle('open', !open);
+}
+
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('mobileOverlay').classList.remove('open');
+}
+
+// ══════════════════════════════════════════════════════════════
+// Panel open / close
+// ══════════════════════════════════════════════════════════════
+const panel   = document.getElementById('editPanel');
+const overlay = document.getElementById('overlay');
+
+function openPanel(noteId) {
+  currentEditId = noteId || null;
+  currentTags   = [];
+  currentFav    = false;
+  renderCategorySelect();
+  contentMode = 'raw';
+  viewerLines = [];
+  document.getElementById('contentViewer').classList.add('hidden');
+  document.getElementById('fContent').classList.remove('hidden');
+  document.getElementById('toggleModeBtn').textContent = '뷰어로 보기';
+
+  if (currentEditId) {
+    const note = getNoteById(currentEditId);
+    if (!note) return;
+    document.getElementById('panelTitle').textContent = '답안 수정';
+    document.getElementById('fTitle').value   = note.title;
+    document.getElementById('fContent').value = note.content;
+    setFieldCategory(note.category);
+    currentTags = [...note.tags];
+    currentFav  = note.isFavorite;
+    document.getElementById('deleteBtn').classList.remove('hidden');
+  } else {
+    document.getElementById('panelTitle').textContent = '새 답안 작성';
+    document.getElementById('fTitle').value   = '';
+    document.getElementById('fContent').value = '';
+    setFieldCategory('미분류');
+    document.getElementById('deleteBtn').classList.add('hidden');
+  }
+
+  renderPanelTags();
+  updateFavBtn();
+  showSaveStatus('');
+
+  const savedKey = sessionStorage.getItem('anthropic_api_key');
+  if (savedKey) document.getElementById('fApiKey').value = savedKey;
+  document.getElementById('kwResult').classList.add('hidden');
+  document.getElementById('kwChips').innerHTML = '';
+
+  // Mark selected card
+  document.querySelectorAll('.answer-card').forEach(c => c.classList.remove('selected'));
+  if (currentEditId) {
+    const card = document.querySelector(`.answer-card[data-id="${currentEditId}"]`);
+    if (card) card.classList.add('selected');
+  }
+
+  panel.style.transform       = 'translateX(0)';
+  overlay.style.opacity       = '1';
+  overlay.style.pointerEvents = 'auto';
+  setTimeout(() => document.getElementById('fTitle').focus(), 300);
+}
+
+function closePanel() {
+  clearTimeout(autoSaveTimer);
+  if (contentMode === 'viewer') syncViewerToTextarea();
+  const title   = document.getElementById('fTitle').value.trim();
+  const content = document.getElementById('fContent').value.trim();
+  if (title || content) performSave();
+
+  panel.style.transform       = 'translateX(100%)';
+  overlay.style.opacity       = '0';
+  overlay.style.pointerEvents = 'none';
+  currentEditId = null;
+  contentMode = 'raw';
+  viewerLines = [];
+  document.getElementById('contentViewer').classList.add('hidden');
+  document.getElementById('fContent').classList.remove('hidden');
+  document.getElementById('toggleModeBtn').textContent = '뷰어로 보기';
+
+  document.querySelectorAll('.answer-card').forEach(c => c.classList.remove('selected'));
+  renderCards();
+  renderSidebarCategories();
+  updateCountBadges();
+}
+
+// ══════════════════════════════════════════════════════════════
+// Category field
+// ══════════════════════════════════════════════════════════════
+function setFieldCategory(cat) {
+  const sel    = document.getElementById('fCategory');
+  const custom = document.getElementById('fCustomCategory');
+  if (loadCategories().includes(cat)) {
+    sel.value = cat; custom.classList.add('hidden'); custom.value = '';
+  } else {
+    sel.value = '__custom__'; custom.value = cat; custom.classList.remove('hidden');
+  }
+}
+
+function getFieldCategory() {
+  const sel = document.getElementById('fCategory');
+  if (sel.value === '__custom__') return document.getElementById('fCustomCategory').value.trim() || '미분류';
+  return sel.value || '미분류';
+}
+
+function onCategoryChange() {
+  const sel    = document.getElementById('fCategory');
+  const custom = document.getElementById('fCustomCategory');
+  if (sel.value === '__custom__') { custom.classList.remove('hidden'); setTimeout(() => custom.focus(), 0); }
+  else                            { custom.classList.add('hidden'); custom.value = ''; }
+  triggerAutoSave();
+}
+
+// ══════════════════════════════════════════════════════════════
+// Tag input
+// ══════════════════════════════════════════════════════════════
+function renderPanelTags() {
+  const box   = document.getElementById('tagBox');
+  const input = document.getElementById('fTagInput');
+  box.querySelectorAll('.tag-pill').forEach(p => p.remove());
+
+  currentTags.forEach(tag => {
+    const pill  = document.createElement('span');
+    pill.className = 'tag-pill';
+    const label = document.createElement('span');
+    label.textContent = '#' + tag;
+    const rmBtn = document.createElement('button');
+    rmBtn.type = 'button'; rmBtn.textContent = '×';
+    rmBtn.addEventListener('click', e => { e.stopPropagation(); removeTag(tag); });
+    pill.appendChild(label); pill.appendChild(rmBtn);
+    box.insertBefore(pill, input);
+  });
+}
+
+function addTag(raw) {
+  const tag = raw.trim().replace(/^#+/,'').replace(/,+$/,'').trim();
+  if (!tag || currentTags.includes(tag)) return;
+  currentTags.push(tag);
+  renderPanelTags();
+  triggerAutoSave();
+}
+
+function removeTag(tag) {
+  currentTags = currentTags.filter(t => t !== tag);
+  renderPanelTags();
+  triggerAutoSave();
+}
+
+document.getElementById('fTagInput').addEventListener('keydown', e => {
+  const input = e.target;
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    if (input.value.trim()) { addTag(input.value); input.value = ''; }
+  }
+  if (e.key === 'Backspace' && !input.value && currentTags.length) removeTag(currentTags[currentTags.length-1]);
+});
+
+document.getElementById('fTagInput').addEventListener('blur', e => {
+  if (e.target.value.trim()) { addTag(e.target.value); e.target.value = ''; }
+});
+
+// ══════════════════════════════════════════════════════════════
+// Favorite
+// ══════════════════════════════════════════════════════════════
+function togglePanelFavorite() { currentFav = !currentFav; updateFavBtn(); triggerAutoSave(); }
+
+function updateFavBtn() {
+  const btn = document.getElementById('favBtn');
+  btn.textContent = currentFav ? '★' : '☆';
+  btn.style.color = currentFav ? '#facc15' : '#d1d5db';
+}
+
+function quickToggleFav(id) {
+  const note = getNoteById(id);
+  if (!note) return;
+  updateNote(id, { isFavorite: !note.isFavorite });
+  if (currentEditId === id) { currentFav = !note.isFavorite; updateFavBtn(); }
+  renderCards();
+  if (currentView === 'favorites') { renderSidebarCategories(); updateCountBadges(); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// Auto-save
+// ══════════════════════════════════════════════════════════════
+function triggerAutoSave() {
+  clearTimeout(autoSaveTimer);
+  showSaveStatus('입력 중...');
+  autoSaveTimer = setTimeout(performSave, 2000);
+}
+
+function performSave() {
+  if (contentMode === 'viewer') syncViewerToTextarea();
+  const title   = document.getElementById('fTitle').value.trim();
+  const content = document.getElementById('fContent').value;
+  if (!title && !content.trim()) { showSaveStatus(''); return; }
+
+  const data = { title, content, category: getFieldCategory(), tags: [...currentTags], isFavorite: currentFav };
+
+  if (currentEditId) {
+    updateNote(currentEditId, data);
+  } else {
+    const note = createNote(data);
+    currentEditId = note.id;
+    document.getElementById('deleteBtn').classList.remove('hidden');
+    document.getElementById('panelTitle').textContent = '답안 수정';
+  }
+  showSaveStatus('저장됨');
+}
+
+function manualSave() {
+  clearTimeout(autoSaveTimer);
+  performSave();
+  renderCards();
+  renderSidebarCategories();
+  updateCountBadges();
+  showToast('저장됨');
+}
+
+function showSaveStatus(msg) {
+  const el = document.getElementById('saveStatus');
+  el.textContent = msg;
+  el.style.color = msg === '저장됨' ? '#3B6D11' : '#9ca3af';
+}
+
+// ══════════════════════════════════════════════════════════════
+// Delete
+// ══════════════════════════════════════════════════════════════
+function handleDelete() {
+  if (!currentEditId) return;
+  if (!confirm('이 답안을 삭제하시겠습니까?\n삭제 후 복구할 수 없습니다.')) return;
+  removeNote(currentEditId);
+  currentEditId = null;
+
+  panel.style.transform       = 'translateX(100%)';
+  overlay.style.opacity       = '0';
+  overlay.style.pointerEvents = 'none';
+
+  renderCards();
+  renderSidebarCategories();
+  updateCountBadges();
+  showToast('삭제됨');
+}
+
+// ══════════════════════════════════════════════════════════════
+// Export / Import
+// ══════════════════════════════════════════════════════════════
+function handleExport() {
+  const notes = loadNotes();
+  if (!notes.length) { showToast('내보낼 답안이 없습니다.'); return; }
+  const dateStr = getToday().replace(/-/g, '');
+  const blob = new Blob([JSON.stringify(notes, null, 2)], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = Object.assign(document.createElement('a'), { href: url, download: `기술사답안노트_${dateStr}.json` });
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(`${notes.length}개 답안을 내보냈습니다.`);
+}
+
+document.getElementById('importInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      if (!Array.isArray(data)) throw new Error('not array');
+      if (!confirm(`${data.length}개 답안을 가져올까요?\n중복 ID는 기존 데이터를 유지합니다.`)) {
+        e.target.value = ''; return;
+      }
+      const existing    = loadNotes();
+      const existingIds = new Set(existing.map(n => n.id));
+      const newNotes    = data.filter(n => n.id && !existingIds.has(n.id));
+      saveNotes([...existing, ...newNotes]);
+      renderAll();
+      showToast(`${newNotes.length}개 답안을 가져왔습니다.`);
+    } catch { showToast('올바른 형식의 JSON 파일이 아닙니다.'); }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+});
+
+// ══════════════════════════════════════════════════════════════
+// Search
+// ══════════════════════════════════════════════════════════════
+document.getElementById('searchInput').addEventListener('input', e => {
+  searchQuery = e.target.value;
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(renderCards, 200);
+});
+
+// ══════════════════════════════════════════════════════════════
+// Auto-save triggers
+// ══════════════════════════════════════════════════════════════
+document.getElementById('fTitle').addEventListener('input', triggerAutoSave);
+document.getElementById('fContent').addEventListener('input', triggerAutoSave);
+document.getElementById('fCustomCategory').addEventListener('input', triggerAutoSave);
+
+// ══════════════════════════════════════════════════════════════
+// Keyboard
+// ══════════════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (!document.getElementById('viewerModal').classList.contains('hidden')) closeViewerModal();
+    else if (panel.style.transform === 'translateX(0)') closePanel();
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// AI Keyword Extraction
+// ══════════════════════════════════════════════════════════════
+async function extractKeywords() {
+  if (contentMode === 'viewer') syncViewerToTextarea();
+  const content = document.getElementById('fContent').value.trim();
+  if (!content) { showToast('답안 내용을 먼저 입력하세요.'); return; }
+
+  const keyInput = document.getElementById('fApiKey');
+  const apiKey   = keyInput.value.trim();
+  if (!apiKey) { showToast('API 키를 입력하세요.'); return; }
+  sessionStorage.setItem('anthropic_api_key', apiKey);
+
+  setExtractLoading(true);
+  document.getElementById('kwResult').classList.add('hidden');
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 150,
+        messages: [{
+          role: 'user',
+          content: `다음 기술사 시험 답안에서 핵심 전문 키워드를 5~10개 추출해 JSON 배열로만 응답하세요.\n예시: ["GPS오차","DOP","위성측위"]\n\n${content.slice(0, 800)}`
+        }]
+      })
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error?.message || `HTTP ${res.status}`);
+    }
+
+    const json     = await res.json();
+    const raw      = json.content?.[0]?.text || '';
+    const keywords = parseKeywordsFromResponse(raw);
+    if (!keywords.length) throw new Error('키워드를 추출하지 못했습니다.');
+    if (currentEditId) updateNote(currentEditId, { keywords });
+    renderKeywordChips(keywords);
+
+  } catch (err) {
+    showToast(err.message || '알 수 없는 오류가 발생했습니다.');
+  } finally {
+    setExtractLoading(false);
+  }
+}
+
+function parseKeywordsFromResponse(raw) {
+  const cleaned = raw.replace(/```json\s*/gi,'').replace(/```\s*/g,'').trim();
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (Array.isArray(parsed)) return parsed.filter(k => typeof k === 'string' && k.trim());
+  } catch {}
+  const m = cleaned.match(/\[[\s\S]*?\]/);
+  if (m) {
+    try {
+      const arr = JSON.parse(m[0]);
+      if (Array.isArray(arr)) return arr.filter(k => typeof k === 'string' && k.trim());
+    } catch {}
+  }
+  return [];
+}
+
+function renderKeywordChips(keywords) {
+  const result = document.getElementById('kwResult');
+  const chips  = document.getElementById('kwChips');
+  chips.innerHTML = keywords.map((kw, i) => {
+    const id = `kwc-${i}`;
+    return `<button id="${id}" onclick="addKeywordAsTag('${esc(kw)}','${id}')"
+      class="px-2.5 py-1 rounded-full text-xs font-medium border transition-all"
+      style="background:#f3f0ff;color:#7c3aed;border-color:#ddd6fe">+ ${esc(kw)}</button>`;
+  }).join('');
+  result.classList.remove('hidden');
+}
+
+function addKeywordAsTag(kw, chipId) {
+  addTag(kw);
+  const chip = document.getElementById(chipId);
+  if (chip) {
+    chip.disabled = true;
+    chip.style.cssText = 'background:#dcfce7;color:#16a34a;border:1px solid #bbf7d0;padding:4px 10px;border-radius:9999px;font-size:12px;font-weight:500;cursor:default;';
+    chip.textContent = '✓ ' + kw;
+  }
+}
+
+function setExtractLoading(on) {
+  const btn     = document.getElementById('extractBtn');
+  const spinner = document.getElementById('extractSpinner');
+  const text    = document.getElementById('extractBtnText');
+  btn.disabled      = on;
+  btn.style.opacity = on ? '0.7' : '1';
+  spinner.classList.toggle('hidden', !on);
+  text.textContent  = on ? '추출 중...' : '키워드 추출';
+}
+
+// ══════════════════════════════════════════════════════════════
+// Viewer Modal
+// ══════════════════════════════════════════════════════════════
+let currentViewerId = null;
+
+function openViewerModal(id) {
+  const note = getNoteById(id);
+  if (!note) return;
+  currentViewerId = id;
+
+  document.getElementById('viewerTitle').textContent = note.title || '(제목 없음)';
+
+  const body = document.getElementById('viewerBody');
+  body.innerHTML = '';
+  body.appendChild(buildViewerContent(note.content || ''));
+
+  const badge = getReviewBadge(note);
+  const footer = document.getElementById('viewerFooter');
+  footer.innerHTML =
+    `<span class="inline-block px-2 py-0.5 rounded-md text-xs font-medium" style="background:#eef4e6;color:#3B6D11">${esc(note.category)}</span>` +
+    (badge ? `<span class="inline-block px-2 py-0.5 rounded-md text-xs font-semibold" style="background:${badge.bg};color:${badge.color}">${badge.text}</span>` : '') +
+    note.tags.map(t => `<span class="inline-block px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[11px]">#${esc(t)}</span>`).join('') +
+    `<div class="flex-1"></div>${renderStepDots(note.reviewStep)}`;
+
+  document.getElementById('viewerModal').classList.remove('hidden');
+}
+
+function closeViewerModal() {
+  document.getElementById('viewerModal').classList.add('hidden');
+  currentViewerId = null;
+}
+
+function openEditFromViewer() {
+  const id = currentViewerId;
+  closeViewerModal();
+  openPanel(id);
+}
+
+function buildViewerContent(content) {
+  const container = document.createElement('div');
+  const lines = content.split('\n');
+  let prevBlank = false;
+
+  lines.forEach(line => {
+    const raw = line.trimEnd();
+
+    if (raw.trim() === '') {
+      if (!prevBlank) {
+        const spacer = document.createElement('div');
+        spacer.style.margin = '8px 0';
+        container.appendChild(spacer);
+        prevBlank = true;
+      }
+      return;
+    }
+    prevBlank = false;
+
+    const el = document.createElement('div');
+
+    if (/^\d+\.\s/.test(raw)) {
+      el.style.cssText = 'font-size:18px;font-weight:700;margin-top:20px;color:#1a1a1a;line-height:1.8';
+      el.textContent = raw;
+    } else if (/^\d+\)\s/.test(raw)) {
+      el.style.cssText = 'font-size:16px;font-weight:600;margin-top:14px;padding-left:16px;color:#2d4a1e;line-height:1.8';
+      el.textContent = raw;
+    } else if (/^\(\d+\)\s/.test(raw)) {
+      el.style.cssText = 'font-size:14px;font-weight:400;margin-top:10px;padding-left:32px;color:#333;line-height:1.8';
+      el.textContent = raw;
+    } else if (/^-\s/.test(raw)) {
+      el.style.cssText = 'font-size:14px;font-weight:400;margin-top:4px;padding-left:48px;color:#444;line-height:1.8;display:list-item;list-style-type:disc;list-style-position:inside;';
+      el.textContent = raw.slice(2);
+    } else {
+      el.style.cssText = 'font-size:14px;font-weight:400;padding-left:16px;color:#333;line-height:1.8';
+      el.textContent = raw;
+    }
+
+    container.appendChild(el);
+  });
+
+  return container;
+}
+
+// ══════════════════════════════════════════════════════════════
+// Toast
+// ══════════════════════════════════════════════════════════════
+let toastTimer = null;
+function showToast(msg) {
+  const prev = document.getElementById('_toast');
+  if (prev) prev.remove();
+  const el = document.createElement('div');
+  el.id = '_toast';
+  el.textContent = msg;
+  Object.assign(el.style, {
+    position:'fixed', bottom:'28px', left:'50%', transform:'translateX(-50%)',
+    zIndex:'9999', padding:'10px 20px', background:'#1f2937', color:'#fff',
+    fontSize:'13px', borderRadius:'12px', pointerEvents:'none',
+    opacity:'1', transition:'opacity 0.2s ease',
+    maxWidth:'88vw', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'
+  });
+  document.body.appendChild(el);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    el.style.opacity = '0';
+    setTimeout(() => el.remove(), 220);
+  }, 2000);
+}
+
+// ══════════════════════════════════════════════════════════════
+// Category Modal
+// ══════════════════════════════════════════════════════════════
+function openCatModal() {
+  renderCatModalList();
+  document.getElementById('newCatInput').value = '';
+  document.getElementById('catModal').classList.remove('hidden');
+}
+
+function closeCatModal() {
+  document.getElementById('catModal').classList.add('hidden');
+}
+
+function renderCatModalList() {
+  const cats   = loadCategories();
+  const notes  = loadNotes();
+  const counts = {};
+  notes.forEach(n => { counts[n.category] = (counts[n.category] || 0) + 1; });
+
+  const list = document.getElementById('catModalList');
+  list.innerHTML = '';
+
+  if (!cats.length) {
+    list.innerHTML = '<p class="px-3 py-2 text-sm text-gray-400">카테고리 없음</p>';
+    return;
+  }
+
+  cats.forEach(name => {
+    const cnt = counts[name] || 0;
+    const row = document.createElement('div');
+    row.className = 'flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50';
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'flex-1 text-sm text-gray-700 truncate';
+    nameEl.textContent = name;
+
+    const cntEl = document.createElement('span');
+    cntEl.className = 'text-xs text-gray-400 flex-shrink-0 w-8 text-right tabular-nums';
+    cntEl.textContent = cnt > 0 ? cnt + '개' : '';
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'flex-shrink-0 px-2.5 py-1 rounded-md text-xs font-medium text-gray-500 border border-gray-200 hover:bg-white transition-colors';
+    editBtn.textContent = '수정';
+    editBtn.addEventListener('click', () => startModalRename(name, row));
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'flex-shrink-0 px-2.5 py-1 rounded-md text-xs font-medium text-red-500 border border-red-200 hover:bg-red-50 transition-colors';
+    delBtn.textContent = '삭제';
+    delBtn.addEventListener('click', () => { deleteCategory(name); renderCatModalList(); });
+
+    row.appendChild(nameEl); row.appendChild(cntEl);
+    row.appendChild(editBtn); row.appendChild(delBtn);
+    list.appendChild(row);
+  });
+}
+
+function startModalRename(name, row) {
+  row.innerHTML = '';
+
+  const input = document.createElement('input');
+  input.type = 'text'; input.value = name;
+  input.className = 'field flex-1 min-w-0 px-2.5 py-1 border rounded-lg text-sm text-gray-700';
+  input.style.borderColor = '#3B6D11';
+
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'flex-shrink-0 px-2.5 py-1 rounded-md text-xs font-semibold text-white';
+  saveBtn.style.background = '#3B6D11';
+  saveBtn.textContent = '저장';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'flex-shrink-0 px-2.5 py-1 rounded-md text-xs font-medium text-gray-500 border border-gray-200 hover:bg-gray-50 transition-colors';
+  cancelBtn.textContent = '취소';
+
+  const doSave = () => {
+    const newName = input.value.trim();
+    if (!newName) { showToast('카테고리명을 입력하세요.'); return; }
+    if (newName !== name) renameCategory(name, newName);
+    renderCatModalList();
+  };
+
+  saveBtn.addEventListener('click', doSave);
+  cancelBtn.addEventListener('click', () => renderCatModalList());
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') doSave();
+    if (e.key === 'Escape') renderCatModalList();
+  });
+
+  row.appendChild(input); row.appendChild(saveBtn); row.appendChild(cancelBtn);
+  setTimeout(() => { input.focus(); input.select(); }, 0);
+}
+
+function addCategoryFromModal() {
+  const input = document.getElementById('newCatInput');
+  const name  = input.value.trim();
+  if (!name) { showToast('카테고리명을 입력하세요.'); return; }
+  const cats = loadCategories();
+  if (cats.includes(name)) { showToast('이미 존재하는 카테고리명입니다.'); return; }
+  cats.push(name);
+  saveCategories(cats);
+  input.value = '';
+  renderCatModalList();
+  renderSidebarCategories();
+}
+
+// ══════════════════════════════════════════════════════════════
+// Content Viewer
+// ══════════════════════════════════════════════════════════════
+function parseContentLines(text) {
+  const rawLines = text.split('\n');
+  const result = [];
+  for (const raw of rawLines) {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      if (result.length > 0 && result[result.length - 1].type !== 'blank')
+        result.push({ type: 'blank', text: '' });
+      continue;
+    }
+    result.push({ type: detectLineType(trimmed), text: trimmed });
+  }
+  while (result.length > 0 && result[result.length - 1].type === 'blank') result.pop();
+  return result;
+}
+
+function detectLineType(text) {
+  if (/^\d+\.\s/.test(text)) return 'h1';
+  if (/^\d+\)\s/.test(text)) return 'h2';
+  if (/^\(\d+\)\s/.test(text)) return 'h3';
+  return 'text';
+}
+
+function viewerLineStyle(type) {
+  switch (type) {
+    case 'h1': return ['font-bold text-gray-800', null];
+    case 'h2': return ['font-semibold text-gray-700', '14px'];
+    case 'h3': return ['font-medium text-gray-600', '28px'];
+    default:   return ['text-gray-600', '28px'];
+  }
+}
+
+function renderContentViewer(editIdx) {
+  const container = document.getElementById('viewerLines');
+  container.innerHTML = '';
+
+  viewerLines.forEach((line, idx) => {
+    if (line.type === 'blank') {
+      const spacer = document.createElement('div');
+      spacer.style.height = '6px';
+      container.appendChild(spacer);
+      return;
+    }
+
+    const row = document.createElement('div');
+
+    if (idx === editIdx) {
+      row.className = 'flex items-center gap-1.5 px-3 py-2 bg-gray-50';
+      const origText = line.text;
+
+      const input = document.createElement('input');
+      input.type = 'text'; input.value = line.text;
+      input.className = 'field flex-1 px-2.5 py-1.5 border rounded-lg text-sm text-gray-700';
+      input.style.borderColor = '#3B6D11';
+
+      const saveBtn = document.createElement('button');
+      saveBtn.className = 'flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold text-white';
+      saveBtn.style.background = '#3B6D11';
+      saveBtn.textContent = '저장';
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium text-gray-500 border border-gray-200 hover:bg-white';
+      cancelBtn.textContent = '취소';
+
+      const doSave = () => {
+        const t = input.value.trim();
+        if (t) { viewerLines[idx].text = t; viewerLines[idx].type = detectLineType(t); }
+        else   { viewerLines.splice(idx, 1); }
+        renderContentViewer();
+        syncViewerToTextarea();
+        triggerAutoSave();
+      };
+      const doCancel = () => {
+        if (!origText) viewerLines.splice(idx, 1);
+        renderContentViewer();
+      };
+
+      saveBtn.addEventListener('click', doSave);
+      cancelBtn.addEventListener('click', doCancel);
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') doSave();
+        if (e.key === 'Escape') doCancel();
+      });
+
+      row.appendChild(input); row.appendChild(saveBtn); row.appendChild(cancelBtn);
+      container.appendChild(row);
+      setTimeout(() => { input.focus(); input.select(); }, 0);
+      return;
+    }
+
+    row.className = 'flex items-start gap-2 px-3 py-2 hover:bg-gray-50 transition-colors';
+    const [cls, indent] = viewerLineStyle(line.type);
+
+    const textEl = document.createElement('div');
+    textEl.className = 'flex-1 text-sm leading-relaxed ' + cls;
+    textEl.style.wordBreak = 'break-all';
+    if (indent) textEl.style.paddingLeft = indent;
+    textEl.textContent = line.text;
+
+    const actions = document.createElement('div');
+    actions.className = 'flex-shrink-0 flex items-center gap-1 mt-0.5';
+    actions.style.visibility = 'hidden';
+    row.addEventListener('mouseenter', () => { actions.style.visibility = 'visible'; });
+    row.addEventListener('mouseleave', () => { actions.style.visibility = 'hidden'; });
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'px-1.5 py-0.5 rounded text-[11px] font-medium text-gray-400 border border-gray-200 hover:bg-white hover:text-gray-600 transition-colors';
+    editBtn.textContent = '수정';
+    editBtn.addEventListener('click', () => renderContentViewer(idx));
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'px-1.5 py-0.5 rounded text-[11px] font-medium text-red-400 border border-red-200 hover:bg-red-50 transition-colors';
+    delBtn.textContent = '삭제';
+    delBtn.addEventListener('click', () => {
+      viewerLines.splice(idx, 1);
+      renderContentViewer();
+      syncViewerToTextarea();
+      triggerAutoSave();
+    });
+
+    actions.appendChild(editBtn); actions.appendChild(delBtn);
+    row.appendChild(textEl); row.appendChild(actions);
+    container.appendChild(row);
+  });
+}
+
+function syncViewerToTextarea() {
+  document.getElementById('fContent').value =
+    viewerLines.map(l => l.type === 'blank' ? '' : l.text).join('\n');
+}
+
+function switchToViewerMode(text) {
+  viewerLines = parseContentLines(text);
+  contentMode = 'viewer';
+  document.getElementById('fContent').classList.add('hidden');
+  document.getElementById('contentViewer').classList.remove('hidden');
+  document.getElementById('toggleModeBtn').textContent = '전체 텍스트 편집';
+  renderContentViewer();
+}
+
+function toggleContentMode() {
+  if (contentMode === 'viewer') {
+    syncViewerToTextarea();
+    contentMode = 'raw';
+    document.getElementById('contentViewer').classList.add('hidden');
+    document.getElementById('fContent').classList.remove('hidden');
+    document.getElementById('toggleModeBtn').textContent = '뷰어로 보기';
+  } else {
+    switchToViewerMode(document.getElementById('fContent').value);
+  }
+}
+
+function addViewerLine() {
+  const newIdx = viewerLines.length;
+  viewerLines.push({ type: 'text', text: '' });
+  renderContentViewer(newIdx);
+}
+
+// ══════════════════════════════════════════════════════════════
+// File Upload
+// ══════════════════════════════════════════════════════════════
+(function() {
+  if (typeof pdfjsLib !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+
+  document.getElementById('fileUploadInput').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (file) handleFileUpload(file);
+    e.target.value = '';
+  });
+
+  const mainEl = document.querySelector('main');
+  let dragCounter = 0;
+
+  mainEl.addEventListener('dragenter', e => {
+    e.preventDefault();
+    dragCounter++;
+    if (dragCounter === 1) document.getElementById('dragOverlay').classList.remove('hidden');
+  });
+  mainEl.addEventListener('dragleave', () => {
+    dragCounter--;
+    if (dragCounter <= 0) {
+      dragCounter = 0;
+      document.getElementById('dragOverlay').classList.add('hidden');
+    }
+  });
+  mainEl.addEventListener('dragover', e => { e.preventDefault(); });
+  mainEl.addEventListener('drop', e => {
+    e.preventDefault();
+    dragCounter = 0;
+    document.getElementById('dragOverlay').classList.add('hidden');
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileUpload(file);
+  });
+})();
+
+async function handleFileUpload(file) {
+  const name   = file.name;
+  const dotIdx = name.lastIndexOf('.');
+  const ext    = dotIdx !== -1 ? name.slice(dotIdx).toLowerCase() : '';
+  const title  = dotIdx !== -1 ? name.slice(0, dotIdx) : name;
+
+  if (ext === '.hwp') {
+    showToast('HWP는 지원되지 않습니다. 한글에서 .txt 또는 .pdf로 변환 후 업로드하세요.');
+    return;
+  }
+  if (!['.txt', '.md', '.pdf', '.docx'].includes(ext)) {
+    showToast('지원하지 않는 파일 형식입니다. (txt, md, pdf, docx 지원)');
+    return;
+  }
+
+  showFileLoading(true);
+  try {
+    let text = '';
+    if (ext === '.txt' || ext === '.md') {
+      text = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = ev => resolve(ev.target.result);
+        reader.onerror = () => reject(new Error('파일을 읽을 수 없습니다.'));
+        reader.readAsText(file, 'UTF-8');
+      });
+    } else if (ext === '.pdf') {
+      if (typeof pdfjsLib === 'undefined') throw new Error('PDF 라이브러리를 불러오지 못했습니다.');
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf   = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const parts = [];
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page    = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        parts.push(content.items.map(item => item.str).join(' '));
+      }
+      text = parts.join('\n\n');
+    } else if (ext === '.docx') {
+      if (typeof mammoth === 'undefined') throw new Error('DOCX 라이브러리를 불러오지 못했습니다.');
+      const arrayBuffer = await file.arrayBuffer();
+      const result = await mammoth.extractRawText({ arrayBuffer });
+      text = result.value;
+    }
+    openPanel(null);
+    document.getElementById('fTitle').value   = title;
+    document.getElementById('fContent').value = text.trim();
+    switchToViewerMode(text.trim());
+    triggerAutoSave();
+  } catch (err) {
+    showToast('파일 읽기 실패: ' + (err.message || '알 수 없는 오류'));
+  } finally {
+    showFileLoading(false);
+  }
+}
+
+function showFileLoading(show) {
+  document.getElementById('fileLoadingOverlay').classList.toggle('hidden', !show);
+}
+
+// ══════════════════════════════════════════════════════════════
+// Gist Sync
+// ══════════════════════════════════════════════════════════════
+const GIST_TOKEN_KEY  = 'gist_token';
+const GIST_ID_KEY     = 'gist_id';
+const GIST_SYNCED_KEY = 'gist_synced_at';
+
+async function uploadToGist() {
+  const token = localStorage.getItem(GIST_TOKEN_KEY);
+  if (!token) return;
+
+  const gistId     = localStorage.getItem(GIST_ID_KEY);
+  const notes      = loadNotes();
+  const categories = loadCategories();
+
+  const body = JSON.stringify({
+    description: '기술사답안노트_자동백업',
+    public: false,
+    files: {
+      'tech_notes.json':      { content: JSON.stringify(notes) },
+      'tech_categories.json': { content: JSON.stringify(categories) }
+    }
+  });
+
+  try {
+    const url    = gistId ? `https://api.github.com/gists/${gistId}` : 'https://api.github.com/gists';
+    const method = gistId ? 'PATCH' : 'POST';
+    const res    = await fetch(url, {
+      method,
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body
+    });
+
+    if (res.status === 401) { showToast('Token이 유효하지 않습니다. Gist 설정을 확인하세요.'); return; }
+    if (res.status === 404) {
+      showToast('Gist ID를 찾을 수 없습니다. ID를 초기화합니다.');
+      localStorage.removeItem(GIST_ID_KEY);
+      return;
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const gist = await res.json();
+    if (!gistId) localStorage.setItem(GIST_ID_KEY, gist.id);
+
+    const now     = new Date();
+    const timeStr = now.toTimeString().slice(0, 5);
+    localStorage.setItem(GIST_SYNCED_KEY, now.toISOString());
+
+    const statusEl = document.getElementById('gistSyncStatus');
+    if (statusEl) {
+      statusEl.textContent = `☁ 동기화됨 ${timeStr}`;
+      statusEl.classList.remove('hidden');
+    }
+  } catch {
+    showToast('동기화 실패. 로컬에는 저장되었습니다.');
+  }
+}
+
+async function downloadFromGist() {
+  const token  = localStorage.getItem(GIST_TOKEN_KEY);
+  const gistId = localStorage.getItem(GIST_ID_KEY);
+  if (!token || !gistId) return;
+
+  try {
+    const res = await fetch(`https://api.github.com/gists/${gistId}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (res.status === 401) { showToast('Token이 유효하지 않습니다. Gist 설정을 확인하세요.'); return; }
+    if (res.status === 404) {
+      showToast('Gist ID를 찾을 수 없습니다. ID를 초기화합니다.');
+      localStorage.removeItem(GIST_ID_KEY);
+      return;
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const gist  = await res.json();
+    const files = gist.files || {};
+
+    if (files['tech_notes.json']) {
+      const notes = JSON.parse(files['tech_notes.json'].content);
+      if (Array.isArray(notes)) localStorage.setItem(LS_KEY, JSON.stringify(notes));
+    }
+    if (files['tech_categories.json']) {
+      const parsed = JSON.parse(files['tech_categories.json'].content);
+      const cats   = Array.isArray(parsed) ? parsed : (Array.isArray(parsed.list) ? parsed.list : null);
+      if (cats) localStorage.setItem(CATS_KEY, JSON.stringify({ list: cats }));
+    }
+
+    renderAll();
+    showToast('Gist에서 데이터를 불러왔습니다.');
+  } catch {
+    showToast('동기화 실패. 로컬에는 저장되었습니다.');
+  }
+}
+
+function openGistModal() {
+  document.getElementById('gistToken').value   = localStorage.getItem(GIST_TOKEN_KEY) || '';
+  document.getElementById('gistIdInput').value = localStorage.getItem(GIST_ID_KEY) || '';
+  const synced = localStorage.getItem(GIST_SYNCED_KEY);
+  const lastEl = document.getElementById('gistLastSync');
+  if (synced) {
+    const d = new Date(synced);
+    lastEl.textContent = `마지막 동기화: ${d.toLocaleDateString('ko-KR')} ${d.toTimeString().slice(0, 5)}`;
+    lastEl.classList.remove('hidden');
+  } else {
+    lastEl.classList.add('hidden');
+  }
+  document.getElementById('gistModal').classList.remove('hidden');
+}
+
+function closeGistModal() {
+  document.getElementById('gistModal').classList.add('hidden');
+}
+
+async function saveGistSettings() {
+  const token  = document.getElementById('gistToken').value.trim();
+  const gistId = document.getElementById('gistIdInput').value.trim();
+  if (token)  localStorage.setItem(GIST_TOKEN_KEY, token);
+  else        localStorage.removeItem(GIST_TOKEN_KEY);
+  if (gistId) localStorage.setItem(GIST_ID_KEY, gistId);
+  else        localStorage.removeItem(GIST_ID_KEY);
+  closeGistModal();
+  await uploadToGist();
+}
+
+async function loadFromGistModal() {
+  const token  = document.getElementById('gistToken').value.trim();
+  const gistId = document.getElementById('gistIdInput').value.trim();
+  if (token)  localStorage.setItem(GIST_TOKEN_KEY, token);
+  else        localStorage.removeItem(GIST_TOKEN_KEY);
+  if (gistId) localStorage.setItem(GIST_ID_KEY, gistId);
+  else        localStorage.removeItem(GIST_ID_KEY);
+  closeGistModal();
+  await downloadFromGist();
+}
+
+// ══════════════════════════════════════════════════════════════
+// Init
+// ══════════════════════════════════════════════════════════════
+function renderAll() {
+  renderCards();
+  renderSidebarCategories();
+  updateCountBadges();
+}
+
+renderAll();
+downloadFromGist();
+</script>
+</body>
+</html>
